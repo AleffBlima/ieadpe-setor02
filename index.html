@@ -3529,7 +3529,8 @@ function renderPedidoArea(payload){
   var enviado=false;
 
   // Estado local dos pedidos
-  var pedidos={};
+  window.pedidosArea={};
+  var pedidos=window.pedidosArea;
   congs.forEach(function(c){pedidos[c.id]={};});
 
   function calcTotal(congId){
@@ -3594,7 +3595,7 @@ function renderPedidoArea(payload){
     };
 
     // Loading
-    var btn=document.querySelector('button[onclick="enviarPedido()"]');
+    var btn=document.getElementById('btnEnviarPedido');
     if(btn){btn.disabled=true;btn.textContent='⏳ Enviando...';}
 
     // Monta resumo de texto (usado tanto no WhatsApp quanto no Firebase)
@@ -3713,7 +3714,7 @@ function renderPedidoArea(payload){
         +'<td style="padding:4px 9px;text-align:center">'
           +'<input type="number" min="0" placeholder="0"'
             +' data-cong="'+c.id+'" data-nome="'+nome.replace(/"/g,'&quot;')+'"'
-            +' oninput="pedidos[this.dataset.cong]=pedidos[this.dataset.cong]||{};pedidos[this.dataset.cong][this.dataset.nome]=parseInt(this.value)||0;atualizarTotais()"'
+            +' oninput="window.pedidosArea[this.dataset.cong]=window.pedidosArea[this.dataset.cong]||{};window.pedidosArea[this.dataset.cong][this.dataset.nome]=parseInt(this.value)||0;if(window.atualizarTotais)window.atualizarTotais()"'
             +' style="width:60px;padding:5px 6px;border:1.5px solid #DDD5BF;border-radius:6px;font-family:Nunito,sans-serif;font-size:.9rem;font-weight:700;text-align:center;outline:none">'
         +'</td>'
         +'<td style="padding:5px 9px;text-align:center;color:#6B5F48;font-size:.75rem">'+(item.und||'un')+'</td>'
@@ -3723,11 +3724,15 @@ function renderPedidoArea(payload){
     html+='</tbody></table></div>';
   });
 
+  // Expõe funções locais no escopo global para os onclick funcionarem
+  window.enviarPedido=enviarPedido;
+  window.atualizarTotais=atualizarTotais;
+
   // Botão de envio
   html+='<div style="background:#fff;border:2px solid #0B1E3D;border-radius:12px;padding:20px 18px;margin-top:8px;margin-bottom:24px">'
     +'<div style="font-family:Cinzel,serif;font-size:.88rem;color:#0B1E3D;margin-bottom:8px;font-weight:700">Enviar Pedido</div>'
     +'<p style="font-size:.8rem;color:#6B5F48;margin-bottom:16px">Confira as quantidades acima e clique em enviar. O almoxarifado do Setor 02 recebera seu pedido automaticamente.</p>'
-    +'<button onclick="enviarPedido()" style="width:100%;padding:14px;background:#0B1E3D;color:#fff;border:none;border-radius:10px;font-family:Cinzel,serif;font-size:1rem;font-weight:700;cursor:pointer;letter-spacing:.04em">✅ ENVIAR PEDIDO AO ALMOXARIFADO</button>'
+    +'<button id="btnEnviarPedido" onclick="window.enviarPedido()" style="width:100%;padding:14px;background:#0B1E3D;color:#fff;border:none;border-radius:10px;font-family:Cinzel,serif;font-size:1rem;font-weight:700;cursor:pointer;letter-spacing:.04em">✅ ENVIAR PEDIDO AO ALMOXARIFADO</button>'
     +'<div style="text-align:center;margin-top:10px;font-size:.7rem;color:#aaa">IEADPE Setor 02 - Sao Lourenco da Mata</div>'
   +'</div>';
 
