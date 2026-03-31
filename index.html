@@ -4307,8 +4307,16 @@ var FAIL_KEY='ig5_fails';
 var SENHA_FB_DOC='ieadpe_setor02';
 var SENHA_FB_KEY='config';
 
-// Senha em memória (carregada do Firebase ou padrão)
+// Senha ADMIN em memória (carregada do Firebase ou padrão)
 var _senhaHash = btoa('ieadpe2025');
+
+// Senhas USER fixas (tipo: usuário operacional de saída)
+var USER_SENHAS = [
+  {hash: btoa('erico'),  nome: 'Erico'},
+  {hash: btoa('nilson'), nome: 'Nilson'},
+  {hash: btoa('eliezer'),nome: 'Eliezer'}
+];
+var _userLogado = null; // nome do user logado
 
 // Carrega senha do Firebase ao iniciar
 async function carregarSenhaFirebase(){
@@ -4351,13 +4359,21 @@ function verificarLogin(){
     setTimeout(function(){document.getElementById('loginScreen').style.display='none';},450);
     return;
   }
+  if(sess && sess.startsWith('user:')){
+    _userLogado=sess.replace('user:','');
+    document.getElementById('loginScreen').classList.add('hide');
+    setTimeout(function(){
+      document.getElementById('loginScreen').style.display='none';
+      abrirModoUser();
+    },450);
+    return;
+  }
 }
 
 function doLogin(){
   var pass=document.getElementById('loginPass').value;
   var err=document.getElementById('loginErr');
 
-  // Proteção contra tentativas excessivas
   var fails=getFails();
   var now=Date.now();
   if(fails.bloqueio && now < fails.bloqueio){
@@ -4367,7 +4383,7 @@ function doLogin(){
     return;
   }
 
-  // Verifica contra senha em memória (carregada do Firebase)
+  // Verifica senha ADMIN
   if(btoa(pass)===_senhaHash){
     sessionStorage.setItem(AUTH_KEY,'ok');
     localStorage.removeItem(FAIL_KEY);
@@ -4376,20 +4392,247 @@ function doLogin(){
     setTimeout(function(){scr.style.display='none';},450);
     err.classList.remove('show');
     toast('Acesso autorizado!','ok');
-  } else {
-    fails.count=(fails.count||0)+1;
-    if(fails.count>=5){
-      fails.bloqueio=Date.now()+60000;
-      fails.count=0;
-      err.textContent='Acesso bloqueado por 60 segundos.';
-    } else {
-      err.textContent='Senha incorreta. Tentativa '+(fails.count)+' de 5.';
-    }
-    localStorage.setItem(FAIL_KEY,JSON.stringify(fails));
-    err.classList.add('show');
-    document.getElementById('loginPass').value='';
-    document.getElementById('loginPass').focus();
+    return;
   }
+
+  // Verifica senhas USER
+  var userMatch=USER_SENHAS.find(function(u){return u.hash===btoa(pass);});
+  if(userMatch){
+    _userLogado=userMatch.nome;
+    sessionStorage.setItem(AUTH_KEY,'user:'+userMatch.nome);
+    localStorage.removeItem(FAIL_KEY);
+    var scr=document.getElementById('loginScreen');
+    scr.classList.add('hide');
+    setTimeout(function(){
+      scr.style.display='none';
+      abrirModoUser();
+    },450);
+    err.classList.remove('show');
+    return;
+  }
+
+  // Senha incorreta
+  fails.count=(fails.count||0)+1;
+  if(fails.count>=5){
+    fails.bloqueio=Date.now()+60000;
+    fails.count=0;
+    err.textContent='Acesso bloqueado por 60 segundos.';
+  } else {
+    err.textContent='Senha incorreta. Tentativa '+(fails.count)+' de 5.';
+  }
+  localStorage.setItem(FAIL_KEY,JSON.stringify(fails));
+  err.classList.add('show');
+  document.getElementById('loginPass').value='';
+  document.getElementById('loginPass').focus();
+}
+
+function abrirModoUser(){
+  // Esconde todo o sistema e mostra apenas a tela de saída
+  document.querySelector('.app').style.display='none';
+  var userPage=document.getElementById('userSaidaPage');
+  if(!userPage){
+    userPage=document.createElement('div');
+    userPage.id='userSaidaPage';
+    userPage.style.cssText='min-height:100vh;background:var(--cream);padding:16px';
+    document.body.appendChild(userPage);
+  }
+  renderUserSaida();
+}
+
+function renderUserSaida(){
+  var page=document.getElementById('userSaidaPage');
+  if(!page)return;
+
+  // Monta selects
+  var optAreas='<option value="">Selecione a área...</option>'
+    +DB.areas.slice().sort(function(a,b){return a.num-b.num;}).map(function(a){
+      return '<option value="'+a.id+'">Área '+a.num+(a.coord?' — '+a.coord:'')+'</option>';
+    }).join('');
+
+  page.innerHTML=''
+    // Header
+    +'<div style="background:#0B1E3D;border-radius:12px;padding:14px 18px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between">'
+      +'<div>'
+        +'<div style="font-family:Cinzel,serif;color:#F0C040;font-size:.95rem;font-weight:700">IEADPE · SETOR 02</div>'
+        +'<div style="color:rgba(255,255,255,.7);font-size:.78rem;margin-top:2px">Registrar Saída de Material · '+_userLogado+'</div>'
+      +'</div>'
+      +'<button onclick="doLogoutUser()" style="background:rgba(255,255,255,.15);border:none;color:#fff;padding:7px 14px;border-radius:8px;font-family:Nunito,sans-serif;cursor:pointer;font-size:.82rem">Sair</button>'
+    +'</div>'
+
+    // Formulário
+    +'<div style="background:#fff;border:1px solid #DDD5BF;border-radius:12px;padding:20px;max-width:600px;margin:0 auto">'
+      +'<div style="font-family:Cinzel,serif;font-size:.95rem;color:#0B1E3D;font-weight:700;margin-bottom:18px;padding-bottom:10px;border-bottom:2px solid #0B1E3D">📦 Registrar Saída</div>'
+
+      // Data
+      +'<div style="margin-bottom:14px">'
+        +'<label style="font-size:.78rem;font-weight:700;color:#6B5F48;text-transform:uppercase;letter-spacing:.05em">Data</label>'
+        +'<input type="date" id="uData" value="'+hoje()+'" style="display:block;width:100%;margin-top:5px;padding:9px 12px;border:1.5px solid #DDD5BF;border-radius:8px;font-family:Nunito,sans-serif;font-size:.9rem;background:#F4EFE5;box-sizing:border-box">'
+      +'</div>'
+
+      // Destino
+      +'<div style="margin-bottom:14px">'
+        +'<label style="font-size:.78rem;font-weight:700;color:#6B5F48;text-transform:uppercase;letter-spacing:.05em">Destino</label>'
+        +'<select id="uTipo" onchange="onUserTipoChange()" style="display:block;width:100%;margin-top:5px;padding:9px 12px;border:1.5px solid #DDD5BF;border-radius:8px;font-family:Nunito,sans-serif;font-size:.9rem;background:#F4EFE5;box-sizing:border-box">'
+          +'<option value="congregacao">⛪ Congregação das Áreas</option>'
+          +'<option value="deposito">🏛 Depósito</option>'
+          +'<option value="casapastoral">🏠 Casa Pastoral</option>'
+        +'</select>'
+      +'</div>'
+
+      // Área e Congregação
+      +'<div id="uAreaCongBox">'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">'
+          +'<div>'
+            +'<label style="font-size:.78rem;font-weight:700;color:#6B5F48;text-transform:uppercase;letter-spacing:.05em">Área</label>'
+            +'<select id="uArea" onchange="onUserAreaChange()" style="display:block;width:100%;margin-top:5px;padding:9px 12px;border:1.5px solid #DDD5BF;border-radius:8px;font-family:Nunito,sans-serif;font-size:.9rem;background:#F4EFE5;box-sizing:border-box">'
+              +optAreas
+            +'</select>'
+          +'</div>'
+          +'<div>'
+            +'<label style="font-size:.78rem;font-weight:700;color:#6B5F48;text-transform:uppercase;letter-spacing:.05em">Congregação</label>'
+            +'<select id="uCong" style="display:block;width:100%;margin-top:5px;padding:9px 12px;border:1.5px solid #DDD5BF;border-radius:8px;font-family:Nunito,sans-serif;font-size:.9rem;background:#F4EFE5;box-sizing:border-box">'
+              +'<option value="">Selecione a área primeiro...</option>'
+            +'</select>'
+          +'</div>'
+        +'</div>'
+      +'</div>'
+
+      // Responsável
+      +'<div style="margin-bottom:14px">'
+        +'<label style="font-size:.78rem;font-weight:700;color:#6B5F48;text-transform:uppercase;letter-spacing:.05em">Nome do Responsável pelo Recebimento</label>'
+        +'<input type="text" id="uResponsavel" placeholder="Nome completo de quem está recebendo..." style="display:block;width:100%;margin-top:5px;padding:9px 12px;border:1.5px solid #DDD5BF;border-radius:8px;font-family:Nunito,sans-serif;font-size:.9rem;background:#F4EFE5;box-sizing:border-box">'
+      +'</div>'
+
+      // Observação
+      +'<div style="margin-bottom:20px">'
+        +'<label style="font-size:.78rem;font-weight:700;color:#6B5F48;text-transform:uppercase;letter-spacing:.05em">Observações (opcional)</label>'
+        +'<textarea id="uNota" placeholder="Itens entregues, condições, etc..." rows="3" style="display:block;width:100%;margin-top:5px;padding:9px 12px;border:1.5px solid #DDD5BF;border-radius:8px;font-family:Nunito,sans-serif;font-size:.88rem;background:#F4EFE5;box-sizing:border-box;resize:vertical"></textarea>'
+      +'</div>'
+
+      // Botão
+      +'<button onclick="registrarSaidaUser()" style="width:100%;padding:14px;background:#0B1E3D;color:#fff;border:none;border-radius:10px;font-family:Cinzel,serif;font-size:1rem;font-weight:700;cursor:pointer;letter-spacing:.04em">✅ REGISTRAR SAÍDA</button>'
+    +'</div>'
+
+    // Histórico do dia
+    +'<div style="max-width:600px;margin:18px auto 0">'
+      +'<div style="font-family:Cinzel,serif;font-size:.82rem;color:#0B1E3D;margin-bottom:8px;padding-bottom:5px;border-bottom:2px solid #0B1E3D">📋 Saídas Registradas Hoje</div>'
+      +'<div id="uHistorico" style="font-size:.82rem;color:#6B5F48">Nenhuma saída registrada ainda hoje.</div>'
+    +'</div>';
+
+  renderUserHistorico();
+}
+
+function onUserTipoChange(){
+  var tipo=document.getElementById('uTipo').value;
+  var box=document.getElementById('uAreaCongBox');
+  if(box)box.style.display=(tipo==='congregacao'?'block':'none');
+}
+
+function onUserAreaChange(){
+  var areaId=document.getElementById('uArea').value;
+  var sel=document.getElementById('uCong');
+  if(!sel)return;
+  var congs=DB.congs.filter(function(c){return c.areaId===areaId;}).sort(function(a,b){return a.nome.localeCompare(b.nome);});
+  sel.innerHTML='<option value="">Selecione a congregação...</option>'
+    +congs.map(function(c){return '<option value="'+c.id+'">'+c.nome+'</option>';}).join('');
+}
+
+function registrarSaidaUser(){
+  var tipo=document.getElementById('uTipo').value;
+  var data=document.getElementById('uData').value;
+  var responsavel=(document.getElementById('uResponsavel').value||'').trim();
+  var nota=(document.getElementById('uNota').value||'').trim();
+
+  if(!data){alert('Informe a data.');return;}
+  if(!responsavel){alert('Informe o nome do responsável pelo recebimento.');return;}
+
+  var destNome='', areaId='', areaN='', congId='', congNome='';
+
+  if(tipo==='deposito'){
+    destNome='Depósito';areaId='__deposito__';areaN='DEP';congId='__deposito__';congNome='Deposito';
+  } else if(tipo==='casapastoral'){
+    destNome='Casa Pastoral';areaId='__casapastoral__';areaN='CP';congId='__casapastoral__';congNome='Casa Pastoral';
+  } else {
+    var uArea=document.getElementById('uArea').value;
+    var uCong=document.getElementById('uCong').value;
+    if(!uArea){alert('Selecione a área.');return;}
+    if(!uCong){alert('Selecione a congregação.');return;}
+    var a=DB.areas.find(function(x){return x.id===uArea;});
+    var c=DB.congs.find(function(x){return x.id===uCong;});
+    if(!a||!c){alert('Área ou congregação não encontrada.');return;}
+    destNome=c.nome;areaId=uArea;areaN=a.num;congId=uCong;congNome=c.nome;
+  }
+
+  if(!confirm('Confirmar saída para "'+destNome+'"?\nResponsável: '+responsavel+'\nData: '+fmtD(data)))return;
+
+  // Registra como gasto/saída operacional (sem produto específico)
+  var registro={
+    id:uid(),
+    ts:Date.now(),
+    tipo:'saida_user',
+    operador:_userLogado,
+    data:data,
+    areaId:areaId,
+    areaN:areaN,
+    congId:congId,
+    congNome:congNome,
+    destino:destNome,
+    responsavel:responsavel,
+    nota:nota,
+    isDeposito:tipo==='deposito',
+    isCasaPastoral:tipo==='casapastoral'
+  };
+
+  // Salva no localStorage e Firebase
+  var saidas=JSON.parse(localStorage.getItem('ig5_saidas_user')||'[]');
+  saidas.push(registro);
+  localStorage.setItem('ig5_saidas_user', JSON.stringify(saidas));
+
+  if(FB_READY){
+    db_fb.collection('ieadpe_setor02').doc('saidas_user').collection('registros')
+      .doc(registro.id).set(registro)
+      .then(function(){console.log('Saída salva no Firebase');})
+      .catch(function(e){console.warn('Firebase saída:',e.message);});
+  }
+
+  // Limpa campos
+  document.getElementById('uResponsavel').value='';
+  document.getElementById('uNota').value='';
+  document.getElementById('uData').value=hoje();
+
+  alert('✅ Saída registrada!\n\nDestino: '+destNome+'\nResponsável: '+responsavel);
+  renderUserHistorico();
+}
+
+function renderUserHistorico(){
+  var hist=document.getElementById('uHistorico');
+  if(!hist)return;
+  var hoje_=hoje();
+  var saidas=JSON.parse(localStorage.getItem('ig5_saidas_user')||'[]');
+  var hoje_saidas=saidas.filter(function(s){return s.data===hoje_;}).reverse();
+  if(!hoje_saidas.length){
+    hist.innerHTML='<div style="color:#aaa;font-size:.82rem;padding:10px 0">Nenhuma saída registrada hoje.</div>';
+    return;
+  }
+  hist.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:.82rem">'
+    +'<thead><tr style="background:#0B1E3D"><th style="padding:7px 10px;color:#fff;text-align:left;font-size:.65rem;text-transform:uppercase">Destino</th><th style="padding:7px 10px;color:#fff;text-align:left;font-size:.65rem;text-transform:uppercase">Responsável</th><th style="padding:7px 10px;color:#fff;text-align:left;font-size:.65rem;text-transform:uppercase">Operador</th><th style="padding:7px 10px;color:#fff;text-align:left;font-size:.65rem;text-transform:uppercase">Obs.</th></tr></thead>'
+    +'<tbody>'
+    +hoje_saidas.map(function(s){
+      return '<tr style="border-bottom:1px solid #EEE">'
+        +'<td style="padding:7px 10px;font-weight:600">'+s.destino+'</td>'
+        +'<td style="padding:7px 10px">'+s.responsavel+'</td>'
+        +'<td style="padding:7px 10px;font-size:.76rem;color:#6B5F48">'+s.operador+'</td>'
+        +'<td style="padding:7px 10px;font-size:.75rem;color:#aaa">'+(s.nota||'—')+'</td>'
+      +'</tr>';
+    }).join('')
+    +'</tbody></table>';
+}
+
+function doLogoutUser(){
+  if(!confirm('Deseja sair?'))return;
+  sessionStorage.removeItem(AUTH_KEY);
+  _userLogado=null;
+  location.reload();
 }
 
 function doLogout(){
